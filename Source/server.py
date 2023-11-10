@@ -3,14 +3,14 @@ import threading
 import platform  # For getting the operating system name
 import subprocess  # For executing a shell command
 
-MESSAGE_LEN = 256
-PORT = 5050
-PING_PORT = 5051
-SERVER = socket.gethostbyname(socket.gethostname())
-ADDR = (SERVER, PORT)
+MESSAGE_LEN = 512
+CHUNK_LEN = 1024
 FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
-CHUNK_LEN = 1024
+
+SERVER = socket.gethostbyname(socket.gethostname())
+PORT = 5050
+ADDR = (SERVER, PORT)
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
@@ -36,7 +36,6 @@ class Management:
 
 management = Management()
 
-
 def send_file(conn, uri):
     file = open(uri, "rb")
     while True:
@@ -61,13 +60,13 @@ def recv_file(conn, uri):
     file = open(uri, "wb")
     file.write(file_bytes)
 
-def send_message(conn, msg):
+def send_msg(conn, msg):
     msg = msg.encode(FORMAT)
     msg_len = len(msg)
     msg += b' ' * (MESSAGE_LEN - msg_len)
     conn.send(msg)
 
-def recv_message(conn):
+def recv_msg(conn):
     res = conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
     return res
 
@@ -75,7 +74,7 @@ def recv_message(conn):
 def search_peer(conn, fname):
     for fn, socket_info in management.sharing_file_list.items():
         if fn == fname:
-            send_message(conn, socket_info)
+            send_msg(conn, socket_info)
             break
 
 
@@ -83,9 +82,7 @@ def save_new_file_info(conn, req):
     cmd, fname, addr = req.split(' ')
     ip, port = addr.split(':')
     management.sharing_file_list.append({fname: f'{ip}: {port}'})
-    for item in management.sharing_file_list:
-        print(f"{item}")
-
+    management.dump_file_list()
 
 def get_host_by_name(hostname):
     for peer_dict in management.listening_peer_list:
@@ -100,13 +97,16 @@ def discover(hostname):
     peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     peer.connect((peer_ip, int(peer_port)))
 
-    send_message(peer, "discover")
+
+
+    send_msg(peer, "discover")
 
     while True:
-        data = recv_message(peer)
+        data = recv_msg(peer)
         if data[-5:] == "<END>":
             break
         management.sharing_file_list.append({data: f"{peer_ip}:{peer_port}"})
+
 
     peer.close()
     management.dump_file_list()
@@ -133,8 +133,8 @@ def ping_TCP(hostname):
     peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     peer.connect((peer_ip, int(peer_port)))
 
-    send_message(peer, "ping")
-    msg = recv_message(peer)
+    send_msg(peer, "ping")
+    msg = recv_msg(peer)
     if msg:
         print(f"[{hostname}] is online.")
     else:
@@ -143,19 +143,16 @@ def ping_TCP(hostname):
     peer.close()
 
 
-
-
-
 def handle_request(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
     #Receive message contains info of peer
-    hostname, listening_socket = recv_message(conn).split(' ')
+    hostname, listening_socket = recv_msg(conn).split(' ')
     management.listening_peer_list.append({hostname: listening_socket})
 
     management.dump_peer_list()
 
     while True:
-        req = recv_message(conn)
+        req = recv_msg(conn)
         print(req)
         if req[0:5] == 'fetch':
             search_peer(conn, req[6:])
