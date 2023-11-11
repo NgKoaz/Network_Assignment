@@ -8,9 +8,8 @@ CHUNK_LEN = 1024
 FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
-
 HOST_NAME = "CLIENT"
-WORKSPACE_DIR = "./client/"
+WORKSPACE_DIR = "./repos_client/"
 
 PEER_IP = socket.gethostbyname(socket.gethostname())
 PEER_PORT = 9996
@@ -31,9 +30,11 @@ def send_msg(conn, msg):
     msg_len = len(msg)
     msg += b' ' * (MESSAGE_LEN - msg_len)
     conn.send(msg)
+    print(f"[SENT] Message: {msg.decode(FORMAT)}")
 
 def recv_msg(conn):
     res = conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
+    print(f"[RECEIVED] Message: {res}")
     return res
 
 def send_file(conn, uri):
@@ -46,23 +47,26 @@ def send_file(conn, uri):
 
     conn.send(b"<END>")
     file.close()
+    print(f"[SENT FILE] Filename: {uri}")
 
 def recv_file(conn, uri):
+    file = open(uri, "ab")
     file_bytes = b''
-    while True:
-        chunk = conn.recv(CHUNK_LEN)
-        if chunk[-5:] == b"<END>":
-            break
-        file_bytes += chunk
-
-    file = open(uri, "wb")
-    file.write(file_bytes)
-    file.flush()
+    done = False
+    while not done:
+        data = conn.recv(1024)
+        if data[-5:] == b"<END>":
+            done = True
+        else:
+            file.write(data)
     file.close()
+    print(f"[RECEIVED FILE] Filename: {uri}")
+
 
 def fetch(conn, req):
     send_msg(conn, req)
     addr = recv_msg(conn)
+    print("Peer's address contain that file: " + addr)
     dest_ip, dest_port = addr.split(':')
 
     fname = req.split(' ')[1]
@@ -77,33 +81,37 @@ def fetch(conn, req):
     recv_file(dest_peer, WORKSPACE_DIR + fname)
 
 def publish(conn, req):
+    #publishC:\\User\\File.txt.txt`
     cmd, lname, fname = req.split(' ')
+    #source uri, destination uri
     shutil.copyfile(lname, WORKSPACE_DIR + fname)
 
     msg = cmd + " " + fname + " " + PEER_IP + ":" + f"{PEER_PORT}"
     send_msg(conn, msg)
 
 def discover(conn):
+    #discover client's local repository
     file_names = os.listdir(WORKSPACE_DIR)
     for file_name in file_names:
         send_msg(conn, file_name)
     send_msg(conn, "<END>")
 
-def ping_TCP(conn, msg):
-    send_msg(conn, msg)
 
 def handle_request(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
 
-    request = recv_msg(conn)
+    while True:
+        request = recv_msg(conn)
+        if request[0:5] == "fetch":
+            fname = request[6:]
+            send_file(conn, WORKSPACE_DIR + fname)
+        elif request[0:8] == "discover":
+            discover(conn)
+        elif request[0:4] == "ping":
+            send_msg(conn, "pong")
+        else:
+            break
 
-    if request[0:5] == "fetch":
-        fname = request[6:]
-        send_file(conn, WORKSPACE_DIR + fname)
-    elif request[0:8] == "discover":
-        discover(conn)
-    else:
-        ping_TCP(conn, request)
     conn.close()
 
 def listening():
@@ -111,7 +119,7 @@ def listening():
     print(f"[Listening] Peer is listening on {PEER_IP}")
     while True:
         conn, addr = peer.accept()
-        thread = threading.Thread(target=handle_request, args={conn, addr})
+        thread = threading.Thread(target=handle_request, args=(conn, addr))
         thread.start()
 
 def start():

@@ -29,7 +29,7 @@ class Management:
         for item in self.listening_peer_list:
             print(item)
 
-    # Dump all peer list
+    # Dump all file list
     def dump_file_list(self):
         for item in self.sharing_file_list:
             print(item)
@@ -46,8 +46,10 @@ def send_file(conn, uri):
 
     conn.send(b"<END>")
     file.close()
+    print(f"[SENT FILE] Filename: {uri}")
 
 def recv_file(conn, uri):
+    file = open(uri, "ab")
     file_bytes = b''
     done = False
     while not done:
@@ -55,27 +57,31 @@ def recv_file(conn, uri):
         if data[-5:] == b"<END>":
             done = True
         else:
-            file_bytes += data
-    
-    file = open(uri, "wb")
-    file.write(file_bytes)
+            file.write(data)
+    file.close()
+    print(f"[RECEIVED FILE] Filename: {uri}")
+
 
 def send_msg(conn, msg):
     msg = msg.encode(FORMAT)
     msg_len = len(msg)
     msg += b' ' * (MESSAGE_LEN - msg_len)
     conn.send(msg)
+    print(f"[SENT] Message: {msg.decode(FORMAT)}")
 
 def recv_msg(conn):
     res = conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
+    print(f"[RECEIVED] Message: {res}")
     return res
 
 
 def search_peer(conn, fname):
-    for fn, socket_info in management.sharing_file_list.items():
-        if fn == fname:
-            send_msg(conn, socket_info)
-            break
+    for file_info in management.sharing_file_list:
+        for file_name, address_port in file_info.items():
+            if file_name == fname:
+                send_msg(conn, address_port)
+                print(f'{file_name}: {address_port}')
+                break
 
 
 def save_new_file_info(conn, req):
@@ -90,14 +96,10 @@ def get_host_by_name(hostname):
             if key == hostname:
                 return peer_dict[key]
 
-
 def discover(hostname):
     peer_ip, peer_port = get_host_by_name(hostname).split(':')
-
     peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     peer.connect((peer_ip, int(peer_port)))
-
-
 
     send_msg(peer, "discover")
 
@@ -111,7 +113,7 @@ def discover(hostname):
     peer.close()
     management.dump_file_list()
 
-def ping(hostname):
+def ping(hostname): # Not used yet
     host, port = get_host_by_name(hostname).split(':')
 
     """
@@ -133,7 +135,9 @@ def ping_TCP(hostname):
     peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     peer.connect((peer_ip, int(peer_port)))
 
-    send_msg(peer, "ping")
+    msg_send = "ping"
+    send_msg(peer, msg_send)
+
     msg = recv_msg(peer)
     if msg:
         print(f"[{hostname}] is online.")
@@ -145,6 +149,7 @@ def ping_TCP(hostname):
 
 def handle_request(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
+
     #Receive message contains info of peer
     hostname, listening_socket = recv_msg(conn).split(' ')
     management.listening_peer_list.append({hostname: listening_socket})
@@ -152,6 +157,7 @@ def handle_request(conn, addr):
     management.dump_peer_list()
 
     while True:
+        #Wait message.
         req = recv_msg(conn)
         print(req)
         if req[0:5] == 'fetch':
@@ -162,7 +168,6 @@ def handle_request(conn, addr):
             break
     conn.close()
 
-
 def listening():
     server.listen()
     print(f"[Listening] Server is listening on {SERVER}")
@@ -171,7 +176,6 @@ def listening():
         thread = threading.Thread(target=handle_request, args=(conn, addr))
         thread.start()
         print(f"[ACTIVE CONNECTION] {addr}")
-
 
 def start():
     thread = threading.Thread(target=listening)
@@ -184,7 +188,7 @@ def start():
         elif cmd == "ping":
             ping_TCP(hostname)
         else:
-            print("WRONG CMD!!! TRY AGAIN...")
+            print("WRONG COMMAND!!! TRY AGAIN...")
 
 
 print("[Starting] server is staring...")
