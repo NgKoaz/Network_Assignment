@@ -49,12 +49,13 @@ def send_file(conn, uri):
     file.close()
     print(f"[SENT FILE] Filename: {uri}")
 
+
 def recv_file(conn, uri):
     file = open(uri, "ab")
     file_bytes = b''
     done = False
     while not done:
-        data = conn.recv(1024)
+        data = conn.recv(CHUNK_LEN)
         if data[-5:] == b"<END>":
             done = True
         else:

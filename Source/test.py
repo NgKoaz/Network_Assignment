@@ -1,3 +1,0 @@
-import customtkinter
-
-customtkinter.set_ap

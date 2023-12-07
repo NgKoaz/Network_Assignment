@@ -1,7 +1,5 @@
 import socket
 import threading
-import platform  # For getting the operating system name
-import subprocess  # For executing a shell command
 
 MESSAGE_LEN = 512
 CHUNK_LEN = 1024
@@ -9,34 +7,34 @@ FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
 SERVER = socket.gethostbyname(socket.gethostname())
-PORT = 5050
+PORT = 5051
 ADDR = (SERVER, PORT)
+file_list_dir = './sharingFileList'
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
 
-class Management:
-    def __init__(self):
-        self.sharing_file_list = [
+listening_peer_list = []
 
-        ]
-        self.listening_peer_list = [
 
-        ]
+# Dump all peer list
+def dump_peer_list():
+    for item in listening_peer_list:
+        print(item)
 
-    # Dump all peer list
-    def dump_peer_list(self):
-        for item in self.listening_peer_list:
-            print(item)
 
-    # Dump all file list
-    def dump_file_list(self):
-        for item in self.sharing_file_list:
-            print(item)
+# Dump all file in sharing file list.
+def dump_file_list():
+    file = open(file_list_dir, 'r')
+    while True:
+        line = file.readline().rstrip()
+        if not line:
+            break
+        print(line)
+    file.close()
 
-management = Management()
 
-def send_file(conn, uri):
+def send_file_list(conn, uri):
     file = open(uri, "rb")
     while True:
         data = file.read(CHUNK_LEN)
@@ -47,6 +45,7 @@ def send_file(conn, uri):
     conn.send(b"<END>")
     file.close()
     print(f"[SENT FILE] Filename: {uri}")
+
 
 def recv_file(conn, uri):
     file = open(uri, "ab")
@@ -69,6 +68,7 @@ def send_msg(conn, msg):
     conn.send(msg)
     print(f"[SENT] Message: {msg.decode(FORMAT)}")
 
+
 def recv_msg(conn):
     res = conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
     print(f"[RECEIVED] Message: {res}")
@@ -76,25 +76,61 @@ def recv_msg(conn):
 
 
 def search_peer(conn, fname):
-    for file_info in management.sharing_file_list:
-        for file_name, address_port in file_info.items():
-            if file_name == fname:
-                send_msg(conn, address_port)
-                print(f'{file_name}: {address_port}')
-                break
+    file = open(file_list_dir, 'r')
+    while True:
+        line = file.readline().rstrip()
+        if not line:
+            break
+        filename, addr = line.split('*')
+        if filename == fname:
+            send_msg(conn, addr)
+            return
+    send_msg(conn, "<NOT FOUND>")
+
+
+def is_duplicated_file(fname):
+    file = open(file_list_dir, 'r')
+    while True:
+        line = file.readline().rstrip()
+        if not line:
+            break
+        filename, addr = line.split('*')
+        if filename == fname:
+            return True
+    return False
+
+
+def append_sharing_file_list(fname, ip, port):
+    try:
+        file = open(file_list_dir, 'a')
+        file.write(f"{fname}*{ip}:{port}\n")
+        print(f"{ip}:{port} are sharing {fname}")
+        return True
+    except:
+        print("Cannot open sharing file list!")
+    return False
 
 
 def save_new_file_info(conn, req):
-    cmd, fname, addr = req.split(' ')
+    cmd, fname, addr = req.split('*')
     ip, port = addr.split(':')
-    management.sharing_file_list.append({fname: f'{ip}: {port}'})
-    management.dump_file_list()
+
+    if not is_duplicated_file(fname):
+        if append_sharing_file_list(fname, ip, port):
+            send_msg(conn, "publish ok")
+            dump_file_list()
+        else:
+            send_msg(conn, "publish server error")
+    else:
+        send_msg(conn, "publish duplicated filename")
+
 
 def get_host_by_name(hostname):
-    for peer_dict in management.listening_peer_list:
+    for peer_dict in listening_peer_list:
         for key in peer_dict.keys():
             if key == hostname:
                 return peer_dict[key]
+
 
 def discover(hostname):
     peer_ip, peer_port = get_host_by_name(hostname).split(':')
@@ -104,29 +140,24 @@ def discover(hostname):
     send_msg(peer, "discover")
 
     while True:
-        data = recv_msg(peer)
-        if data[-5:] == "<END>":
+        fname = recv_msg(peer)
+        if fname[-5:] == "<END>":
             break
-        management.sharing_file_list.append({data: f"{peer_ip}:{peer_port}"})
-
-
+        append_sharing_file_list(fname, peer_ip, peer_port)
     peer.close()
-    management.dump_file_list()
+    dump_file_list()
 
-def ping(hostname): # Not used yet
-    host, port = get_host_by_name(hostname).split(':')
 
-    """
-    Returns True if host (str) responds to a ping request.
-    Remember that a host may not respond to a ping (ICMP) request even if the host name is valid.
-    """
-    # Option for the number of packets as a function of
-    param = '-n' if platform.system().lower() == 'windows' else '-c'
-
-    # Building the command. Ex: "ping -c 1 google.com"
-    command = ['ping', param, '2', host]
-
-    return subprocess.call(command) == 0
+def send_list(conn):
+    file = open(file_list_dir, 'r')
+    while True:
+        line = file.readline().rstrip()
+        if not line:
+            break
+        filename, addr = line.split('*')
+        send_msg(conn, filename)
+    send_msg(conn, "<END>")
+    file.close()
 
 
 def ping_TCP(hostname):
@@ -150,23 +181,26 @@ def ping_TCP(hostname):
 def handle_request(conn, addr):
     print(f"[NEW CONNECTION] {addr} connected.")
 
-    #Receive message contains info of peer
+    # Receive message contains info of peer
     hostname, listening_socket = recv_msg(conn).split(' ')
-    management.listening_peer_list.append({hostname: listening_socket})
+    listening_peer_list.append({hostname: listening_socket})
 
-    management.dump_peer_list()
+    dump_peer_list()
 
     while True:
-        #Wait message.
+        # Wait message.
         req = recv_msg(conn)
         print(req)
         if req[0:5] == 'fetch':
             search_peer(conn, req[6:])
         elif req[0:7] == 'publish':
             save_new_file_info(conn, req)
+        elif req[0:8] == 'get list':
+            send_list(conn)
         else:
             break
     conn.close()
+
 
 def listening():
     server.listen()
@@ -177,12 +211,17 @@ def listening():
         thread.start()
         print(f"[ACTIVE CONNECTION] {addr}")
 
+
 def start():
     thread = threading.Thread(target=listening)
     thread.start()
     while True:
         cmd = input()
-        cmd, hostname = cmd.split(' ')
+        hostname = ""
+        try:
+            cmd, hostname = cmd.split(' ')
+        except:
+            print("WRONG COMMAND!!! TRY AGAIN...")
         if cmd == "discover":
             discover(hostname)
         elif cmd == "ping":

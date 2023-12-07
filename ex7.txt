@@ -1,0 +1,137 @@
+hostname SSS
+banner motd #Unauthorized Access#
+
+line console 0
+password khoa
+login 
+exit
+
+no ip domain-lookup
+enable password khoa
+service password-encryption
+
+do wr
+
+
+----
+
+
+hostname HQR3
+banner motd #Unauthorized Access#
+
+line console 0
+password khoa
+login 
+exit
+
+no ip domain-lookup
+enable password khoa
+service password-encryption
+
+ip domain-name khoa.net
+username khoa password khoa
+crypto key generate rsa
+1024
+line vty 0 15
+login local
+transport input ssh
+exit
+
+
+do wr
+
+
+-------------------------------------
+
+in r fa0/1-2
+sw m t
+
+in r fa0/3-24
+sw m ac
+sw ac vlan 20
+exit
+do wr
+
+-------------------------------------
+
+vlan 80
+vlan 90
+vlan 100
+vlan 110
+vlan 120
+vlan 130
+exit
+
+in r gig1/0/2-7
+switchport mode trunk
+exit
+do wr
+
+
+----
+in r fa0/3-24
+sw po maxi 1
+sw po mac sticky
+sw po v sh
+exit
+do wr
+
+
+--------
+ip routing
+
+router ospf 10
+router-id 3.3.3.3
+network 192.168.101.128 255.255.255.224 area 0
+network 192.168.101.160 255.255.255.224 area 0
+network 192.168.101.192 255.255.255.224 area 0
+network 192.168.101.224 255.255.255.224 area 0
+network 192.168.102.0 255.255.255.224 area 0
+network 192.168.102.32 255.255.255.224 area 0
+
+exit
+do wr
+
+
+--------------
+
+router ospf 10
+router-id 8.8.8.8
+
+network 195.136.17.4 255.255.255.252 area 0
+network 195.136.17.12 255.255.255.252 area 0
+
+
+exit
+do wr
+
+----------------------
+in vlan 10
+ip address 192.168.100.1 255.255.255.192
+ip helper-address 192.168.102.67
+exit
+in vlan 20
+ip address 192.168.100.65 255.255.255.192
+ip helper-address 192.168.102.67
+exit
+in vlan 30
+ip address 192.168.100.129 255.255.255.192
+ip helper-address 192.168.102.67
+exit
+in vlan 40
+ip address 192.168.100.193 255.255.255.192
+ip helper-address 192.168.102.67
+exit
+in vlan 50
+ip address 192.168.101.1 255.255.255.192
+ip helper-address 192.168.102.67
+exit
+in vlan 60
+ip address 192.168.101.65 255.255.255.192
+ip helper-address 192.168.102.67
+exit
+do wr
+
+
+
+
