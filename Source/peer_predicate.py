@@ -2,59 +2,71 @@ import socket
 import customtkinter as ctk
 from customtkinter import filedialog
 import threading
-import os
+import re
 
 MESSAGE_LEN = 512
 CHUNK_LEN = 1024
 FORMAT = 'utf-8'
 
+# These value can be modified.
+TRACKER_IP = socket.gethostbyname(socket.gethostname())
+TRACKER_PORT = 5051
+
+
 ctk.set_appearance_mode("Light")
+
 
 class MyGUI:
     def __init__(self):
         # GUI: Create root
         self.root = ctk.CTk()
-        # self.root.geometry("500x500+200+100")
+        # self.root.geometry("+500+300")
         self.root.title("File Sharing")
 
         # Core: Create ip, port to listen connection from other peer.
         self.peer_ip = socket.gethostbyname(socket.gethostname())
-        self.listen_port = 9092
+        self.listen_port = 9091
         self.peerServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.isConnected = False
+        self.token = ""
         self.isListened = False
         self.file_list = []
-        self.repository = './publish_file_list2'
+        self.repository = './publish_file_list'
 
-        # GUI + Core: Create tracker ip, port to connect Tracker in P2P network
-        self.tracker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Core: Create tracker ip, port to connect Tracker in P2P network
+        self.tracker_socket = None
 
-        # GUI: Create entities to connect to the tracker
-        self.mainFrame = ctk.CTkFrame(master=self.root)
-        self.mainFrame.pack(padx=10, pady=10)
+        # GUI: Connection screen
+        self.login_frame = ctk.CTkFrame(master=self.root)
+        self.login_frame.pack(padx=10, pady=10)
 
-        self.connectionFrame = ctk.CTkFrame(master=self.mainFrame)
-        self.connectionFrame.grid(row=0, column=0, padx=10, pady=10)
-
-        self.hostname_label = ctk.CTkLabel(master=self.connectionFrame, text="Your hostname")
+        self.hostname_label = ctk.CTkLabel(master=self.login_frame, text="Your username")
         self.hostname_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.hostname_entry = ctk.CTkEntry(master=self.connectionFrame)
+        self.hostname_entry = ctk.CTkEntry(master=self.login_frame)
         self.hostname_entry.grid(row=1, column=0, padx=5)
 
-        self.tracker_ip_label = ctk.CTkLabel(master=self.connectionFrame, text="Tracker IP")
+        self.tracker_ip_label = ctk.CTkLabel(master=self.connection_frame, text="Tracker IP")
         self.tracker_ip_label.grid(row=0, column=1, padx=5, pady=5, sticky="w")
-        self.tracker_ip_entry = ctk.CTkEntry(master=self.connectionFrame)
+        self.tracker_ip_entry = ctk.CTkEntry(master=self.connection_frame)
         self.tracker_ip_entry.grid(row=1, column=1, padx=5)
 
-        self.tracker_port_label = ctk.CTkLabel(master=self.connectionFrame, text="Tracker port")
+        self.tracker_port_label = ctk.CTkLabel(master=self.connection_frame, text="Tracker Port")
         self.tracker_port_label.grid(row=0, column=2, padx=5, pady=5, sticky="w")
-        self.tracker_port_entry = ctk.CTkEntry(master=self.connectionFrame)
+        self.tracker_port_entry = ctk.CTkEntry(master=self.connection_frame)
         self.tracker_port_entry.grid(row=1, column=2, padx=5)
 
-        self.button1 = ctk.CTkButton(master=self.connectionFrame,
+        self.button1 = ctk.CTkButton(master=self.connection_frame,
                                      text="Click here to connect!",
                                      command=self.connect_to_tracker)
         self.button1.grid(row=2, columnspan=3, pady=5)
+        self.connection_status_label = ctk.CTkLabel(master=self.connection_frame, text="", text_color="red")
+        self.connection_status_label.grid(row=3, columnspan=3, padx=5)
+
+        # dsds
+
+        # GUI: Create entities to connect to the tracker
+        self.mainFrame = ctk.CTkFrame(master=self.root)
+        # self.mainFrame.pack(padx=10, pady=10)
 
         # GUI: Create GUI to find and fetch file.
         self.fetchFrame = ctk.CTkFrame(master=self.mainFrame)
@@ -118,19 +130,6 @@ class MyGUI:
         self.consoleFrame = ctk.CTkFrame(master=self.mainFrame)
         self.consoleFrame.grid(row=3, column=0, padx=10, pady=20, sticky='ew')
 
-        #   GUI: Create Input
-        # self.inputFrame = ctk.CTkFrame(master=self.consoleFrame)
-        # self.inputFrame.pack()
-
-        # self.inputEntry = ctk.CTkEntry(master=self.inputFrame,
-        #                               height=30,
-        #                               width=300,
-        #                               placeholder_text="Write your command")
-        # self.inputEntry.grid(row=0, column=0, padx=2)
-
-        # self.enterButton = ctk.CTkButton(master=self.inputFrame, text="Enter")
-        # self.enterButton.grid(row=0, column=1, padx=2)
-
         #   GUI: Create output
         self.outputFrame = ctk.CTkFrame(master=self.consoleFrame)
         self.outputFrame.pack(fill="x")
@@ -141,15 +140,45 @@ class MyGUI:
         self.consoleTextbox = ctk.CTkTextbox(master=self.outputFrame, height=150)
         self.consoleTextbox.pack(fill="x")
 
-        thread = threading.Thread(target=self.listening)
-        thread.start()
-
         self.root.protocol("WM_DELETE_WINDOW", self.closing)
         self.root.mainloop()
 
+    def print_login_error(self, err_str):
+        self.connection_status_label.configure(text=err_str)
+
+    # def handle_login(self):
+    #     self.connect_to_tracker()
+    #     if not self.isConnected:
+    #         return
+    #     # Send tracker username, password to login
+    #     self.send_login_info()
+    #     if not self.isLogin:
+    #         return
+    #     # Login success, we close login screen. Switch to main screen.
+    #     self.login_screen.pack_forget()
+    #     self.mainFrame.pack()
+    #     # Start to listen other peer want to fetch file
+    #     thread = threading.Thread(target=self.listening)
+    #     thread.start()
+
+    def send_login_info(self):
+        # TO DO
+        # msg pattern = login|username="<>"
+        # self.tracker_socket (this socket connect to tracker, use this to send, receive)
+        # Example: send(self.tracker_socket, "<Message>")
+
+        # if the server send ack has pattern like "login|token=",
+        # that mean your password or username is wrong, you need to use print_login_error function above
+        # Example: print_login_error("tài khoản hoặc mật khẩu không đúng!")
+
+        # if the server send ack has pattern like "login|token=eyjdsifiskdfjkh9...",
+        # that mean you logged in, so you must write "self.isLogin = True"
+        pass
+
     def closing(self):
         self.isListened = False
-        self.tracker_socket.close()
+        if self.isConnected:
+            self.tracker_socket.close()
         self.peerServer.close()
         self.root.destroy()
 
@@ -166,6 +195,54 @@ class MyGUI:
             conn, addr = self.peerServer.accept()
             thread = threading.Thread(target=self.handle_request, args=(conn, addr))
             thread.start()
+
+    def close_login_screen(self):
+        self.connection_frame.pack_forget()
+
+    def open_main_screen(self):
+        self.mainFrame.pack()
+
+    def connect_to_tracker(self):
+        if self.isConnected:
+            return
+        tracker_ip = self.tracker_ip_entry.get()
+        # Check IP
+        if not is_ip(tracker_ip):
+            self.print_login_error("IP is not in the correct format!")
+            return
+        # Check port
+        try:
+            tracker_port = int(self.tracker_port_entry.get())
+        except Exception as e:
+            self.print_login_error("Port must be an integer!")
+            print(e)
+            return
+
+        if not is_port(tracker_port):
+            self.print_login_error("Port is not in range [0; 65535]")
+            return
+        # Connect to tracker
+        try:
+            self.tracker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.tracker_socket.settimeout(1)
+            self.tracker_socket.connect((tracker_ip, tracker_port))
+        except Exception as e:
+            self.print_login_error(f"Failed to connect to Tracker! Please login again!")
+            print(e)
+
+        if not self.auth_with_tracker():
+            self.print_login_error(f"Error message from server: {msg}")
+            self.tracker_socket.close()
+            return
+
+        self.isConnected = True
+        self.close_login_screen()
+        self.open_main_screen()
+
+    def auth_with_tracker(self):
+        # authen here
+        
+        return False
 
     def handle_request(self, conn, addr):
         self.write_log(f"Connection from {addr}")
@@ -215,19 +292,19 @@ class MyGUI:
                 return local_directory
         return ""
 
-    def connect_to_tracker(self):
-        if self.isConnected:
-            return
-        new_log = ""
-        try:
-            self.tracker_socket.connect((self.tracker_ip_entry.get(), int(self.tracker_port_entry.get())))
-            send_msg(self.tracker_socket, f"{self.hostname_entry.get()} {self.peer_ip}:{self.listen_port}")
-            new_log = f"Connected to {self.tracker_ip_entry.get(), self.tracker_port_entry.get()}"
-            self.isConnected = True
-        except:
-            new_log = f"Cannot connect to {self.tracker_ip_entry.get(), self.tracker_port_entry.get()}"
-        finally:
-            self.write_log(new_log)
+    # def _connect_to_tracker(self):
+    #     if self.isConnected:
+    #         return
+    #     new_log = ""
+    #     try:
+    #         self.tracker_socket.connect((self.tracker_ip_entry.get(), int(self.tracker_port_entry.get())))
+    #         send_msg(self.tracker_socket, f"{self.hostname_entry.get()} {self.peer_ip}:{self.listen_port}")
+    #         new_log = f"Connected to {self.tracker_ip_entry.get(), self.tracker_port_entry.get()}"
+    #         self.isConnected = True
+    #     except:
+    #         new_log = f"Cannot connect to {self.tracker_ip_entry.get(), self.tracker_port_entry.get()}"
+    #     finally:
+    #         self.write_log(new_log)
 
     def write_log(self, str_log):
         self.consoleTextbox.insert(ctk.END, str_log + "\n")
@@ -298,6 +375,7 @@ class MyGUI:
         return res
 
     def fetch_file(self, filename):
+
         addr = self.get_peer_hold_file(filename)
         if addr == "<NOT FOUND>":
             self.write_log("Fetch: File is not found!")
@@ -330,7 +408,7 @@ class MyGUI:
             self.write_log(f"Fetch: Cannot receive full file from {addr}")
             return
 
-        self.publish_file(filename, save_file_dir)
+        # self.publish_file(filename, save_file_dir)
 
     def handle_refresh_button(self):
         if not self.isConnected:
@@ -351,7 +429,24 @@ class MyGUI:
         except:
             self.write_log("Get list: Not fully success!")
 
-        self.files_combobox.configure(values=self.file_list)
+        # sself.files_combobox.configure(values=self.file_list)
+
+
+def is_ip(ip):
+    ip_pattern = re.compile(
+        r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$'
+    )
+    if ip_pattern.match(ip):
+        octets = list(map(int, ip.split('.')))
+        if all(0 <= octet <= 255 for octet in octets):
+            return True
+    return False
+
+
+def is_port(port):
+    if 0 <= port <= 65535:
+        return True
+    return False
 
 
 def send_msg(conn, msg):

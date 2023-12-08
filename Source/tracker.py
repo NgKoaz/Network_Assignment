@@ -4,68 +4,90 @@ import threading
 MESSAGE_LEN = 512
 CHUNK_LEN = 1024
 FORMAT = 'utf-8'
+UNKNOWN_MESSAGE = "<UNKNOWN>"
 
+SERVER = socket.gethostbyname(socket.gethostname())
+PORT = 5051
+ADDR = (SERVER, PORT)
+file_list_dir = './sharingFileList'
 
-################ THIS PROJECT IN PROGRESS
+listening_peer_list = []
 
 class Tracker:
     def __init__(self):
-        #Create socket and bind ip, port
-        self.tracker_ip = socket.gethostbyname(socket.gethostname())
-        self.tracker_port = 5051
-        self.tracker_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #Bind socket
-        self.binding()
-
-    def binding(self):
         try:
-            self.tracker_socket.bind((self.tracker_ip, self.tracker_port))
-        except:
-            print("Port have been used! Changing your listening port!")
+            self.tracker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.tracker.bind(ADDR)
+        except Exception as e:
+            print(e)
+            return
 
     def listening(self):
-        self.tracker_socket.listen()
-        print(f"Tracker is listening on {self.tracker_ip, self.tracker_port}")
+        self.tracker.listen()
+        print(f"Tracker is listening on {ADDR}")
         while True:
-            conn, addr = self.tracker_socket.accept()
-            thread = threading.thread(target=self.handle_request, args=(conn, addr))
+            conn, addr = self.tracker.accept()
+            thread = threading.Thread(target=self.handle_request, args=(conn, addr))
+            thread.start()
 
     def handle_request(self, conn, addr):
-        print(f"Connection from {addr}")
-        hostname, listening_addr = recv_msg(conn).split(' ')
-        #while True:
+        print(f"{addr} connected.")
+
+        while True:
+            msg = recv_msg(conn)
 
 
 
 def send_msg(conn, msg):
     msg = msg.encode(FORMAT)
-    msg += b' ' * (MESSAGE_LEN - len(msg))
+    msg_len = len(msg)
+    msg += b' ' * (MESSAGE_LEN - msg_len)
     conn.send(msg)
 
 
 def recv_msg(conn):
-    return conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
+    res = conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
+    return res
 
 
-def send_file(conn, uri):
+def send_file_list(conn, uri):
     file = open(uri, "rb")
     while True:
         data = file.read(CHUNK_LEN)
         if not data:
             break
         conn.send(data)
+
     conn.send(b"<END>")
     file.close()
 
 
 def recv_file(conn, uri):
     file = open(uri, "ab")
-    while True:
-        data = conn.recv(CHUNK_LEN)
-        if data[-5:0] == b"<END>":
-            break
-        file.write(data)
+    file_bytes = b''
+    done = False
+    while not done:
+        data = conn.recv(1024)
+        if data[-5:] == b"<END>":
+            done = True
+        else:
+            file.write(data)
     file.close()
 
 
 Tracker()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
