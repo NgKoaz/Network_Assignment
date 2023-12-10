@@ -58,7 +58,10 @@ class MyGUI:
         self.password_entry = ttk.Entry(master=self.login_field)
         self.password_entry.grid(row=3, column=0, padx=5, pady=5, sticky="WE")
         # GUI: Login frame -> Login butotn
-        self.login_button = ttk.Button(master=self.login_field, text="Login", command=self.handle_login)
+        self.login_button = ttk.Button(master=self.login_field,
+                                       style='Accent.TButton',
+                                       text="Login",
+                                       command=self.handle_login)
         self.login_button.grid(row=4, column=0, padx=5, pady=8)
         # GUI: Login frame -> Status label
         self.login_status_field = ttk.Frame(master=self.login_frame)
@@ -83,7 +86,10 @@ class MyGUI:
         self.filepath_label.grid(row=0, columnspan=3, padx=3, pady=3, sticky="W")
         self.filepath_entry = ttk.Entry(master=self.publish_frame)
         self.filepath_entry.grid(row=1, columnspan=2, padx=3, pady=5)
-        self.browse_button = ttk.Button(master=self.publish_frame, text="Browse...", command=self.browse_file)
+        self.browse_button = ttk.Button(master=self.publish_frame,
+                                        style='Accent.TButton',
+                                        text="Browse...",
+                                        command=self.browse_file)
         self.browse_button.grid(row=1, column=2, padx=3, pady=5)
         # GUI: Publish frame -> Filename entry
         self.filename_label = ttk.Label(master=self.publish_frame, text="Filename")
@@ -91,7 +97,10 @@ class MyGUI:
         self.filename_entry = ttk.Entry(master=self.publish_frame)
         self.filename_entry.grid(row=3, columnspan=3, padx=3, pady=5, sticky="WE")
         # GUI: Publish frame -> Publish button
-        self.publish_button = ttk.Button(master=self.publish_frame, text="Publish", command=self.handle_publish)
+        self.publish_button = ttk.Button(master=self.publish_frame,
+                                         style='Accent.TButton',
+                                         text="Publish",
+                                         command=self.handle_publish)
         self.publish_button.grid(row=4, columnspan=3, pady=5)
 
         # GUI: Left frame -> Fetch frame
@@ -108,7 +117,10 @@ class MyGUI:
         self.fetch_owner_entry = ttk.Entry(master=self.fetch_frame)
         self.fetch_owner_entry.pack(padx=3, pady=3, fill="x")
         # GUI: Fetch frame -> Fetch button
-        self.fetch_button = ttk.Button(master=self.fetch_frame, text="Fetch", command=self.handle_fetch)
+        self.fetch_button = ttk.Button(master=self.fetch_frame,
+                                       style='Accent.TButton',
+                                       text="Fetch",
+                                       command=self.handle_fetch)
         self.fetch_button.pack(padx=3, pady=3)
 
         # GUI: Right frame -> Tree frame
@@ -121,7 +133,7 @@ class MyGUI:
         cols = ("Filename", "Owner")
         self.tree_view = ttk.Treeview(master=self.tree_frame, show="headings",
                                       yscrollcommand=self.tree_scroll.set,
-                                      columns=cols, height=10)
+                                      columns=cols, height=14)
         self.tree_view.pack()
 
         self.tree_view.column("Filename", width=200)
@@ -134,17 +146,46 @@ class MyGUI:
 
         # GUI: buttons_frame
         self.buttons_frame = ttk.Frame(master=self.right_frame)
-        self.buttons_frame.grid(row=1, column=0, sticky="WES")
+        self.buttons_frame.grid(row=1, column=0, pady=3, sticky="WES")
 
-        self.refresh_button = ttk.Button(master=self.buttons_frame, text="Refresh", command=self.handle_refresh_button)
+        self.refresh_button = ttk.Button(master=self.buttons_frame,
+                                         style='Accent.TButton',
+                                         text="Refresh",
+                                         command=self.handle_refresh_button)
         self.refresh_button.pack(padx=3, pady=3, side="left")
 
-        self.logout_button = ttk.Button(master=self.buttons_frame, text="Logout")
-        self.logout_button.pack(padx=3, pady=3, side="right")
+        # GUI: Log frame
+        self.log_frame = ttk.Frame(master=self.main_frame)
+        self.log_frame.grid(row=1, columnspan=2, padx=3, pady=3, sticky="WE")
+
+        self.log_label = ttk.Label(master=self.log_frame, text="Log")
+        self.log_label.pack(padx=3, pady=2, fill='x')
+
+        self.log_textbox = tk.Text(master=self.log_frame, height=8)
+        self.log_textbox.pack(padx=3, pady=2, fill='x')
+
+        self.clear_button = ttk.Button(master=self.log_frame,
+                                       style='Accent.TButton',
+                                       text="Clear",
+                                       command=self.clear_log)
+        self.clear_button.pack(padx=3, pady=2, side="right")
+
+        self.logout_button = ttk.Button(master=self.log_frame,
+                                        style='Accent.TButton',
+                                        text="Logout",
+                                        command=self.logout)
+        self.logout_button.pack(padx=3, pady=3, side="left")
 
         # Core:
         self.root.protocol("WM_DELETE_WINDOW", self.closing_window)
         self.root.mainloop()
+
+    def logout(self):
+        self.token = ""
+        self.main_frame.pack_forget()
+        self.username_entry.delete(0, tk.END)
+        self.password_entry.delete(0, tk.END)
+        self.login_frame.pack()
 
     def refresh_tree_view_data(self):
         # Clear all old data.
@@ -179,12 +220,13 @@ class MyGUI:
         send_msg(self.tracker_socket, "file list")
         # Receive ACK of request
         if not recv_msg(self.tracker_socket) == "file list":
-            print("Not received confirmation message from tracker")
+            self.print_log("[ERROR] Get file list: Not received confirmation message!")
             return
         # Waiting tracker communicate with database
         time.sleep(0.15)
         recv_file(self.tracker_socket, self.workspace_path + "/" + self.file_list_json_file)
         send_msg(self.tracker_socket, "file list success")
+        self.print_log("[SUCCESS] Get file list")
 
     def browse_file(self):
         filepath = filedialog.askopenfilename(title="Choose a file you want to publish")
@@ -240,6 +282,12 @@ class MyGUI:
     def print_login_error(self, err_msg):
         self.login_status_label.configure(text=err_msg, foreground="red", width=35, anchor="center")
 
+    def print_log(self, str_log):
+        self.log_textbox.insert(1.0, str_log + '\n')
+
+    def clear_log(self):
+        self.log_textbox.delete(1.0, tk.END)
+
     def handle_login_response(self, res):
         # Pattern of response is "msg|token:<value>"
         msg, token = res.split("|")
@@ -250,7 +298,8 @@ class MyGUI:
             self.token = token.split(":")[1]
             return True
         else:
-            print("[LOGIN ERROR] ERROR FROM PROGRAM! WRONG PROCESS PROTOCOL")
+            self.token = ""
+            print("[ERROR] Login: Wrong process!")
             return False
 
     def handle_login(self):
@@ -299,28 +348,32 @@ class MyGUI:
         if res == "auth success":
             return True
         elif res == "auth fail":
-            print("Authorize fail")
+            self.print_log("[FAIL] Authenticate.")
         else:
-            print("Wrong process!")
+            self.print_log("[ERROR] Authentication: Wrong process!")
         return False
 
     def enter_to_main_frame(self):
         self.login_frame.pack_forget()
         self.main_frame.pack()
         thread = threading.Thread(target=self.listening)
+        thread.daemon = True
         thread.start()
 
     def declare_address(self):
         if not self.connect_to_tracker():
-            print("Failed to connect to tracker!")
+            self.print_log("[ERROR] Failed to connect to tracker!")
+            return
 
         # Send `address` to come into handle_address_declaration process.
         send_msg(self.tracker_socket, "address")
         # Check ACK from tracker
         if not recv_msg(self.tracker_socket) == "address":
-            print("[ERROR] Wrong process!")
+            self.print_log("[ERROR] Wrong process!")
+            return
         # Authenticate with tracker by using jwt
         if not self.authentication_process():
+            self.print_log("[ERROR] Authenticate fail!")
             return
 
         # Send `ip`, `port` to tracker
@@ -330,9 +383,9 @@ class MyGUI:
         # Receive login response
         res = recv_msg(self.tracker_socket)
         if res == "address success":
-            print(res)
+            self.print_log("[SUCCESS] Give address to tracker!")
         else:
-            print(res)
+            self.print_log("[FAIL] Give address to tracker!")
 
     def save_publish_file_at_local_storage(self, filepath, filename):
         # Saving into file
@@ -350,16 +403,21 @@ class MyGUI:
     def handle_publish(self):
         # Checking filepath and filename
         filepath = self.filepath_entry.get()
-        if not is_valid_filepath(filepath):
-            print("Invalid filepath!!!")
+        if not filepath or not is_valid_filepath(filepath):
+            self.print_log("[ERROR] Publish: Invalid filepath!")
+            return
         filename = self.filename_entry.get()
+        if not filename:
+            self.print_log("[ERROR] Publish: Filename is empty")
+            return
         if not check_str_before_send(filename):
-            print("Your filename must not contain [:, |]")
+            self.print_log("[ERROR] Publish: Your filename must not contain [:, |]")
+            return
 
         # Request `publish` service from tracker
         send_msg(self.tracker_socket, "publish")
         if not recv_msg(self.tracker_socket) == "publish":
-            print("WRONG PROCESS!")
+            self.print_log("[ERROR] Publish: WRONG PROCESS!")
             return
         # Authentication process
         self.authentication_process()
@@ -369,13 +427,13 @@ class MyGUI:
         res = recv_msg(self.tracker_socket)
         if res == "publish success":
             self.save_publish_file_at_local_storage(filepath, filename)
-            print(res)
+            self.print_log("[SUCCESS] Publish file!")
         elif res == "publish fail":
             stt, msg = res.split('|')
             msg = msg.split(':')[1]
-            print(msg)
+            self.print_log("[FAIL] Publish file!")
         else:
-            print("WRONG LAST ACK")
+            self.print_log("[ERROR] Publish: Wrong process!")
 
     def fetch_file_from_peer(self, addr, download_directory, filename):
         addr, ip, port = addr.split(":")
@@ -386,39 +444,47 @@ class MyGUI:
         send_msg(peer_socket, "fetch")
         # Receive confirm request
         if not recv_msg(peer_socket) == "fetch":
-            print("Cannot get confirmation from another peer")
+            self.print_log("[ERROR] Fetch: Cann")
             return
         # Send filename
         send_msg(peer_socket, f"filename:{filename}")
         # Receive file status
         msg = recv_msg(peer_socket)
         if msg == "file not found":
-            print("This file may be deleted from this peer!")
+            self.print_log("[FAIL] Fetch (PEER): Peer cannot found the file!")
             return
         if not msg == "file found":
-            print("WRONG PROCESS!!!!")
+            self.print_log("[ERROR] Fetch (PEER): Wrong process!")
             return
         # File is found, prepare to get file
         recv_file(peer_socket, download_directory + '/' + filename)
         # Send success
         send_msg(peer_socket, "fetch success")
+        self.print_log("[SUCCESS] Fetch (PEER): Get file!")
 
     def handle_fetch(self):
         filename = self.fetch_filename_entry.get()
+        if not filename:
+            self.print_log("[ERROR] Fetch: Filename is empty!")
+            return
         if not check_str_before_send(filename):
-            print("Filename not allow : |")
+            self.print_log("[ERROR] Fetch: Filename field not allow : |")
             return
         username = self.fetch_owner_entry.get()
-        if not check_str_before_send(username):
-            print("Username not allow : |")
+        if not username:
+            self.print_log("[ERROR] Fetch: Username is empty!")
+            return
+        if not check_str_before_send(username) or not username:
+            self.print_log("[ERROR] Fetch: Owner field do not allow : |")
             return
         download_filepath = filedialog.askdirectory(title="Choose a directory you want to save your file")
         if not download_filepath:
-            print("Please, choose your filepath to fetch!")
+            self.print_log("[NOTIFY] Fetch: Please, choose your filepath to fetch!")
+            return
 
         send_msg(self.tracker_socket, "fetch")
         if not recv_msg(self.tracker_socket) == "fetch":
-            print("WRONG PROCESS")
+            self.print_log("[ERROR] Fetch: Not received confirmation message")
             return
         # Send file we need to fetch
         send_msg(self.tracker_socket, f"filename:{filename}|username:{username}")
@@ -427,16 +493,15 @@ class MyGUI:
         # ######### Splot
         stt, msg = res.split("|")
         if stt == "fetch fail":
-            print(msg)
+            self.print_log(f"[FAIL] Fetch (tracker): {msg}")
             return
         if not stt == "fetch success":
-            print("WRONG FETCH PROCESS")
+            self.print_log("[ERROR] Fetch (tracker): Wrong process!")
             return
-
         if self.fetch_file_from_peer(msg, download_filepath, filename):
-            print(f"FETCH {filename} from {msg} SUCCESS")
+            self.print_log(f"[SUCCESS] Fetch: Get {filename} from {msg}.")
         else:
-            print(f"FETCH FAIL!!!")
+            self.print_log(f"[FAIL] Fetch: Get {filename} from {msg}.")
 
     def file_discover(self, conn):
         # Make sure the uri is an existed json file
@@ -448,11 +513,11 @@ class MyGUI:
         send_file(conn, uri)
         res = recv_msg(conn)
         if res == "discover success":
-            print(res)
+            self.print_log("[SUCCESS] Discover")
         elif res == "discover fail":
-            print(res)
+            self.print_log("[FAIL] Discover")
         else:
-            print("NOT SYNC")
+            self.print_log("[ERROR]: Wrong process!")
 
     def handle_fetch_request_from_another(self, conn):
         # Send back `fetch` to confirm.
@@ -465,7 +530,6 @@ class MyGUI:
         file = open(self.workspace_path + "/data.json", "r")
         data_js = json.load(file)
         for f in data_js:
-            print(f)
             if f['filename'] == filename:
                 filepath = f['filepath']
                 break
@@ -478,14 +542,14 @@ class MyGUI:
 
         res = recv_msg(conn)
         if res == "fetch success":
-            print("FETCH OK")
+            self.print_log("[SUCCESS] Fetch file!")
         elif res == "fetch fail":
-            print("Fetch fail")
+            self.print_log("[FAIL] Fetch file!")
         else:
-            print("WRONG FETCH PROCESS!!")
+            self.print_log("[ERROR] Wrong process!")
 
     def handle_request(self, conn, addr):
-        print(f"{addr} connected.")
+        self.print_log(f"{addr} connected.")
         while True:
             command = recv_msg(conn)
             if command == "discover":
@@ -496,6 +560,8 @@ class MyGUI:
                 break
 
     def listening(self):
+        if self.isListened:
+            return
         self.peer_server.bind((self.peer_ip, self.listen_port))
         self.peer_server.listen()
         self.isListened = True
@@ -507,10 +573,11 @@ class MyGUI:
             try:
                 conn, addr = self.peer_server.accept()
                 thread = threading.Thread(target=self.handle_request, args=(conn, addr))
+                thread.daemon = True
                 thread.start()
             except Exception as e:
-                print("Socket close: Peer stopped serving!")
-                break
+                self.print_log("Socket close: Peer stopped serving!")
+                return
 
     def closing_window(self):
         try:
