@@ -1,139 +1,31 @@
-import socket
-import threading
-import shutil
-import os
+import tkinter as tk
 
-MESSAGE_LEN = 512
-CHUNK_LEN = 1024
-FORMAT = 'utf-8'
-DISCONNECT_MESSAGE = "!DISCONNECT"
+def resize_frame():
+    new_width = int(entry_width.get())
+    new_height = int(entry_height.get())
+    frame.config(width=new_width, height=new_height)
 
-HOST_NAME = "CLIENT2"
-WORKSPACE_DIR = "./repos_client2/"
+# Tạo cửa sổ
+root = tk.Tk()
+root.title("Thay đổi kích thước frame")
 
-PEER_IP = socket.gethostbyname(socket.gethostname())
-PEER_PORT = 9999
-PEER_ADDR = (PEER_IP, PEER_PORT)
+# Tạo frame
+frame = tk.Frame(root, width=100, height=100)
+frame.pack(padx=10, pady=10)
 
-SERVER_PORT = 5050
-SERVER_HOST = socket.gethostbyname(socket.gethostname()) #Change when ...
-SERVER_ADDR = (SERVER_HOST, SERVER_PORT)
+# Tạo entry và button để nhập và thay đổi kích thước
+label_width = tk.Label(root, text="Width:")
+label_width.pack()
+entry_width = tk.Entry(root)
+entry_width.pack()
 
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(SERVER_ADDR)
+label_height = tk.Label(root, text="Height:")
+label_height.pack()
+entry_height = tk.Entry(root)
+entry_height.pack()
 
-peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-peer.bind(PEER_ADDR)
+resize_button = tk.Button(root, text="Thay đổi kích thước", command=resize_frame)
+resize_button.pack()
 
-def send_msg(conn, msg):
-    msg = msg.encode(FORMAT)
-    msg_len = len(msg)
-    msg += b' ' * (MESSAGE_LEN - msg_len)
-    conn.send(msg)
-    print(f"[SEND] Message: {msg.decode(FORMAT)}")
-
-def recv_msg(conn):
-    res = conn.recv(MESSAGE_LEN).decode(FORMAT).strip()
-    print(f"[RECEIVE] Message: {res}")
-    return res
-
-def send_file(conn, uri):
-    file = open(uri, "rb")
-    while True:
-        data = file.read(CHUNK_LEN)
-        if not data:
-            break
-        conn.send(data)
-
-    conn.send(b"<END>")
-    file.close()
-    print(f"[SEND FILE] Filename: {uri}")
-
-def recv_file(conn, uri):
-    file = open(uri, "ab")
-    file_bytes = b''
-    done = False
-    while not done:
-        data = conn.recv(1024)
-        if data[-5:] == b"<END>":
-            done = True
-        else:
-            file.write(data)
-    file.close()
-    print(f"[RECEIVED FILE] Filename: {uri}")
-
-def fetch(conn, req):
-    send_msg(conn, req)  #send_msg(conn, fname)
-    addr = recv_msg(conn)
-    dest_ip, dest_port = addr.split(':')
-
-    fname = req.split(' ')[1]
-
-    dest_peer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    dest_peer.connect((dest_ip, int(dest_port)))
-
-    #Request to fetch file from peer
-    send_msg(dest_peer, req)
-
-    #Receive file
-    recv_file(dest_peer, WORKSPACE_DIR + fname)
-
-def publish(conn, req):
-    #publishC:\\User\\File.txt.txt`
-    cmd, lname, fname = req.split(' ')
-    #source uri, destination uri
-    shutil.copyfile(lname, WORKSPACE_DIR + fname)
-
-    msg = cmd + " " + fname + " " + PEER_IP + ":" + f"{PEER_PORT}"
-    send_msg(conn, msg)
-
-def discover(conn):
-    #discover client's local repository
-    file_names = os.listdir(WORKSPACE_DIR)
-    for file_name in file_names:
-        send_msg(conn, file_name)
-    send_msg(conn, "<END>")
-
-
-def handle_request(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected.")
-
-    while True:
-        request = recv_msg(conn)
-        if request[0:5] == "fetch":
-            fname = request[6:]
-            send_file(conn, WORKSPACE_DIR + fname)
-        elif request[0:8] == "discover":
-            discover(conn)
-        elif request[0:4] == "ping":
-            send_msg(conn, "pong")
-        else:
-            break
-
-    conn.close()
-
-def listening():
-    peer.listen()
-    print(f"[Listening] Peer is listening on {PEER_IP}")
-    while True:
-        conn, addr = peer.accept()
-        thread = threading.Thread(target=handle_request, args=(conn, addr))
-        thread.start()
-
-def start():
-    thread = threading.Thread(target=listening)
-    thread.start()
-
-    msg = f"{HOST_NAME} {PEER_IP}:{PEER_PORT}"
-    send_msg(client, msg)
-
-    while True:
-        command = input().strip()
-        if command[0:5] == 'fetch':
-            fetch(client, command)
-        elif command[0:7] == 'publish':
-            publish(client, command)
-        else:
-            print('CANNOT RECOGNIZE COMMAND!!!')
-
-start()
+# Main loop
+root.mainloop()

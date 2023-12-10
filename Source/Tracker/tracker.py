@@ -2,6 +2,7 @@ import socket
 import threading
 import os
 import jwt
+import json
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from bson.objectid import ObjectId
@@ -71,19 +72,25 @@ def handle_address_info(msg):
     pass
 
 
-def handle_address_declaration(conn):
-    # Send back to confirm request for peer
-    send_msg(conn, "address")
-    # Receive token to identify user
+def authenticate_peer(conn):
     token = recv_msg(conn)
     payload = handle_token_msg(token)
     user_id = payload['_id']
     if user_id:
         send_msg(conn, "auth success")
+        return user_id
     else:
         send_msg(conn, "auth fail")
-        return
+        return ""
 
+
+def handle_address_declaration(conn):
+    # Send back to confirm request for peer
+    send_msg(conn, "address")
+    # Authentication process
+    user_id = authenticate_peer(conn)
+    if not user_id:
+        return
     # Receive `ip, port` from peer
     msg = recv_msg(conn)
     # Checking port (TO DO)
@@ -98,6 +105,104 @@ def handle_address_declaration(conn):
     )
 
 
+def handle_publish_request(conn):
+    # Send back to confirm going to publish process.
+    send_msg(conn, "publish")
+    # Authenticate peer
+    user_id = authenticate_peer(conn)
+    if not user_id:
+        return
+    # Receive filname from peer
+    filename = recv_msg(conn)
+
+    # Update database
+    # Check whether filename is empty.
+    if not filename:
+        send_msg(conn, "publish fail|msg: Your filename is empty!")
+        return
+    # Check whether filename is duplicated.
+    result = database.files.find_one(
+        {"filename": filename}
+    )
+    if result:
+        send_msg(conn, "publish fail|msg: Your filename is duplicated with a file you upload before!")
+        return
+    # No duplicate, insert into `files` collection.
+    database.files.insert_one({
+        "user_id": ObjectId(user_id),
+        "filename": filename
+    })
+    send_msg(conn, "publish success")
+
+
+def handle_fetch_request(conn):
+    # Send back to confirm `fetch` request from user
+    send_msg(conn, "fetch")
+    # Receive `filename` and `username` from peer
+    req = recv_msg(conn)
+    # Split
+    filename, username = req.split("|")
+    filename = filename.split(":")[1]
+    username = username.split(":")[1]
+
+    # Send last ACK
+    # Checking whether username does exist
+    result = database.users.find_one({"username": username})
+    if not result:
+        send_msg(conn, "fetch fail|msg: Username you provided is not found!")
+        return
+    user_id = str(result["_id"])
+    user_addr = str(result["address"])
+    if not user_addr:
+        send_msg(conn, "fetch fail|msg: Username is not online!")
+        return
+    # Checking whether filename belongs to that user
+    result = database.files.find_one({"user_id": ObjectId(user_id), "filename": filename})
+    if not result:
+        send_msg(conn, "fetch fail|msg: This username don't have this file!")
+        return
+    # Fetch success
+    send_msg(conn, f"fetch success|address:{user_addr}")
+
+
+def handle_get_file_list(conn):
+    # Send back `file list` to confirm
+    send_msg(conn, "file list")
+    # Get file list from data base then save in the file
+    data = database.files.aggregate([
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user_id",
+                "foreignField": "_id",
+                "as": "user"
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "user_id": 1,
+                "filename": 1,
+                "user.username": 1
+            }
+        }
+    ])
+    str_data = '''
+    []
+    '''
+    js_data = json.loads(str_data)
+    for d in list(data):
+        js_data.append({"filename": d["filename"], "username": d["user"][0]["username"]})
+
+    with open("./data/file-list.json", "w") as file:
+        json.dump(js_data, file, indent=4)
+
+    send_file(conn, "./data/file-list.json")
+    if not recv_msg(conn) == "file list success":
+        print("Peer cannot get file!")
+    print("Peer get file-list file success!")
+
+
 def handle_request(conn, addr):
     print(f"{addr} connected.")
     while True:
@@ -106,6 +211,13 @@ def handle_request(conn, addr):
             handle_login_request(conn)
         elif command == "address":
             handle_address_declaration(conn)
+        elif command == "publish":
+            handle_publish_request(conn)
+        elif command == "fetch":
+            handle_fetch_request(conn)
+        elif command == "file list":
+            handle_get_file_list(conn)
+            pass
         elif command == "ping":
             send_msg(conn, "pong")
         elif command == "":

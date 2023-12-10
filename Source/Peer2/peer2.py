@@ -25,7 +25,7 @@ class MyGUI:
     def __init__(self):
         # GUI: Create root
         self.root = tk.Tk()
-        #self.root.geometry("+500+150")
+        self.root.geometry("+500+150")
         self.root.title("P2P File Sharing")
         self.root.tk.call('source', './Forest-ttk-theme/forest-light.tcl')
         ttk.Style().theme_use('forest-light')
@@ -33,7 +33,7 @@ class MyGUI:
         # Core: Create socket to listen connection from other peer.
         self.peer_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.peer_ip = socket.gethostbyname(socket.gethostname())
-        self.listen_port = 9091
+        self.listen_port = 9092
         self.isListened = False
         self.token = ""
         self.workspace_path = os.getenv("WORKSPACE_PATH")
@@ -44,76 +44,47 @@ class MyGUI:
 
         # GUI: Login screen
         self.login_frame = ttk.Frame(master=self.root)
-        self.login_frame.pack(padx=50, pady=50)
-        self.login_field = ttk.Frame(master=self.login_frame)
-        self.login_field.pack(pady=(0, 5))
-        # GUI: Login frame -> Username field
-        self.username_label = ttk.Label(master=self.login_field, text="Username", width=25)
-        self.username_label.grid(row=0, column=0, padx=5, pady=3, sticky="W")
-        self.username_entry = ttk.Entry(master=self.login_field)
-        self.username_entry.grid(row=1, column=0, padx=5, pady=3, sticky="WE")
-        # GUI: Login frame -> Password field
-        self.password_label = ttk.Label(master=self.login_field, text="Password", width=25)
-        self.password_label.grid(row=2, column=0, padx=5, pady=5, sticky="W")
-        self.password_entry = ttk.Entry(master=self.login_field)
-        self.password_entry.grid(row=3, column=0, padx=5, pady=5, sticky="WE")
-        # GUI: Login frame -> Login butotn
-        self.login_button = ttk.Button(master=self.login_field, text="Login", command=self.handle_login)
-        self.login_button.grid(row=4, column=0, padx=5, pady=8)
-        # GUI: Login frame -> Status label
-        self.login_status_field = ttk.Frame(master=self.login_frame)
-        self.login_status_field.pack(pady=(5, 0))
-        self.login_status_label = ttk.Label(master=self.login_status_field, text="", width=35)
-        self.login_status_label.grid(padx=5, pady=5)
+        self.login_frame.pack()
+        # GUI: Username field
+        self.username_label = ttk.Label(master=self.login_frame, text="Username")
+        self.username_label.pack()
+        self.username_entry = ttk.Entry(master=self.login_frame)
+        self.username_entry.pack()
+        # GUI: Password field
+        self.password_label = ttk.Label(master=self.login_frame, text="Password")
+        self.password_label.pack()
+        self.password_entry = ttk.Entry(master=self.login_frame)
+        self.password_entry.pack()
+        # GUI: Login butotn
+        self.login_button = ttk.Button(master=self.login_frame, text="Login", command=self.handle_login)
+        self.login_button.pack()
+        # GUI: Status label
+        # Add status label here (TO DO)
 
         # GUI: Main screen
         self.main_frame = ttk.Frame(master=self.root)
 
-        # GUI: Left and right frame
-        self.left_frame = ttk.Frame(master=self.main_frame)
-        self.left_frame.grid(row=0, column=0, padx=2, pady=5, sticky="N")
-        self.right_frame = ttk.Frame(master=self.main_frame)
-        self.right_frame.grid(row=0, column=1, padx=2, pady=(20, 5), sticky="N")
-
-        # GUI: Left frame -> Publish frame
-        self.publish_frame = ttk.LabelFrame(master=self.left_frame, text="Publish File")
-        self.publish_frame.grid(row=0, column=0, padx=3, pady=5)
+        # GUI: Main -> Publish frame
+        self.publish_frame = ttk.Frame(master=self.main_frame)
+        self.publish_frame.grid(row=0, column=0, padx=5, pady=5)
         # GUI: Publish frame -> Filepath entry
-        self.filepath_label = ttk.Label(master=self.publish_frame, text="Filepath")
-        self.filepath_label.grid(row=0, columnspan=3, padx=3, pady=3, sticky="W")
         self.filepath_entry = ttk.Entry(master=self.publish_frame)
-        self.filepath_entry.grid(row=1, columnspan=2, padx=3, pady=5)
+        self.filepath_entry.pack()
         self.browse_button = ttk.Button(master=self.publish_frame, text="Browse...", command=self.browse_file)
-        self.browse_button.grid(row=1, column=2, padx=3, pady=5)
+        self.browse_button.pack()
         # GUI: Publish frame -> Filename entry
-        self.filename_label = ttk.Label(master=self.publish_frame, text="Filename")
-        self.filename_label.grid(row=2, columnspan=3, padx=3, pady=3, sticky="W")
         self.filename_entry = ttk.Entry(master=self.publish_frame)
-        self.filename_entry.grid(row=3, columnspan=3, padx=3, pady=5, sticky="WE")
+        self.filename_entry.pack()
         # GUI: Publish frame -> Publish button
         self.publish_button = ttk.Button(master=self.publish_frame, text="Publish", command=self.handle_publish)
-        self.publish_button.grid(row=4, columnspan=3, pady=5)
+        self.publish_button.pack()
 
-        # GUI: Left frame -> Fetch frame
-        self.fetch_frame = ttk.LabelFrame(master=self.left_frame, text="Fetch file")
-        self.fetch_frame.grid(row=1, column=0, padx=3, pady=5, sticky="WE")
-        # GUI: Fetch frame -> filename entry
-        self.fetch_filename_label = ttk.Label(master=self.fetch_frame, text="Filename")
-        self.fetch_filename_label.pack(padx=3, pady=3, fill="x")
-        self.fetch_filename_entry = ttk.Entry(master=self.fetch_frame)
-        self.fetch_filename_entry.pack(padx=3, pady=3, fill="x")
-        # GUI: Fetch frame -> username entry
-        self.fetch_owner_label = ttk.Label(master=self.fetch_frame, text="Owner")
-        self.fetch_owner_label.pack(padx=3, pady=3, fill="x")
-        self.fetch_owner_entry = ttk.Entry(master=self.fetch_frame)
-        self.fetch_owner_entry.pack(padx=3, pady=3, fill="x")
-        # GUI: Fetch frame -> Fetch button
-        self.fetch_button = ttk.Button(master=self.fetch_frame, text="Fetch", command=self.handle_fetch)
-        self.fetch_button.pack(padx=3, pady=3)
-
-        # GUI: Right frame -> Tree frame
-        self.tree_frame = ttk.Frame(master=self.right_frame)
-        self.tree_frame.grid(row=0, column=0, sticky="N")
+        # GUI: Main -> Fetch frame
+        self.fetch_frame = ttk.Frame(master=self.main_frame)
+        self.fetch_frame.grid(row=0, column=1, padx=5, pady=5)
+        # GUI: Fetch frame -> Tree frame
+        self.tree_frame = ttk.Frame(master=self.fetch_frame)
+        self.tree_frame.pack()
         # GUI: Tree frame -> tree scroll
         self.tree_scroll = ttk.Scrollbar(master=self.tree_frame)
         self.tree_scroll.pack(side="right", fill="y")
@@ -121,7 +92,7 @@ class MyGUI:
         cols = ("Filename", "Owner")
         self.tree_view = ttk.Treeview(master=self.tree_frame, show="headings",
                                       yscrollcommand=self.tree_scroll.set,
-                                      columns=cols, height=10)
+                                      columns=cols, height=13)
         self.tree_view.pack()
 
         self.tree_view.column("Filename", width=200)
@@ -131,16 +102,18 @@ class MyGUI:
         self.tree_view.heading("Filename", text="Filename")
         self.tree_view.heading("Owner", text="Owner")
         self.tree_view.bind("<ButtonRelease-1>", func=self.handle_tree_view_click)
+        self.refresh_button = ttk.Button(master=self.tree_frame, text="Refresh", command=self.handle_refresh_button)
+        self.refresh_button.pack()
 
-        # GUI: buttons_frame
-        self.buttons_frame = ttk.Frame(master=self.right_frame)
-        self.buttons_frame.grid(row=1, column=0, sticky="WES")
-
-        self.refresh_button = ttk.Button(master=self.buttons_frame, text="Refresh", command=self.handle_refresh_button)
-        self.refresh_button.pack(padx=3, pady=3, side="left")
-
-        self.logout_button = ttk.Button(master=self.buttons_frame, text="Logout")
-        self.logout_button.pack(padx=3, pady=3, side="right")
+        # GUI: Fetch frame -> filename entry
+        self.fetch_filename_entry = ttk.Entry(master=self.fetch_frame)
+        self.fetch_filename_entry.pack()
+        # GUI: Fetch frame -> username entry
+        self.fetch_username_entry = ttk.Entry(master=self.fetch_frame)
+        self.fetch_username_entry.pack()
+        # GUI: Fetch frame -> Fetch button
+        self.fetch_button = ttk.Button(master=self.fetch_frame, text="Fetch", command=self.handle_fetch)
+        self.fetch_button.pack()
 
         # Core:
         self.root.protocol("WM_DELETE_WINDOW", self.closing_window)
@@ -166,9 +139,9 @@ class MyGUI:
         if selected_item:
             filename, owner = self.tree_view.item(selected_item, "values")
             self.fetch_filename_entry.delete(0, tk.END)
-            self.fetch_owner_entry.delete(0, tk.END)
+            self.fetch_username_entry.delete(0, tk.END)
             self.fetch_filename_entry.insert(0, filename)
-            self.fetch_owner_entry.insert(0, owner)
+            self.fetch_username_entry.insert(0, owner)
 
     def get_file_list(self):
         # Checking whether folder do exists
@@ -237,9 +210,6 @@ class MyGUI:
             return False
         return True
 
-    def print_login_error(self, err_msg):
-        self.login_status_label.configure(text=err_msg, foreground="red", width=35, anchor="center")
-
     def handle_login_response(self, res):
         # Pattern of response is "msg|token:<value>"
         msg, token = res.split("|")
@@ -259,18 +229,13 @@ class MyGUI:
 
         # Check string before send. [:,|,',"] is not allow
         if not check_str_before_send(username):
-            self.print_login_error("Do not use [ : | ] for username!")
-            return
+            print("Don't use : and | \' \" for username")
         if not check_str_before_send(password):
-            self.print_login_error("Don't use [ : | ] for password")
-            return
-        if len(username) > 100 and len(password) > 100:
-            self.print_login_error("Your username or password is too long")
-            return
+            print("Don't use : and | \' \" for password")
 
         # Check connection, if not connect
         if not self.connect_to_tracker():
-            self.print_login_error("Cannot connect to tracker!")
+            print("Cannot connect to tracker!")
             return
         # Send `login` type request
         send_msg(self.tracker_socket, "login")
@@ -281,16 +246,20 @@ class MyGUI:
 
         # Send `username`, `password` to login
         msg = f"username:{username}|password:{password}"
+        if len(msg) > 1024:
+            print("ERROR OUT OF LENGTH")
+            return
         send_msg(self.tracker_socket, msg)
         time.sleep(0.05)
 
         # Receive login response
         res = recv_msg(self.tracker_socket)
         if self.handle_login_response(res):
+            print("Login success")
             self.root.title(f"P2P File Sharing [username: {username}]")
             self.enter_to_main_frame()
         else:
-            self.print_login_error("Wrong password or username!")
+            print("Wrong password or username!")
 
     def authentication_process(self):
         # Send token for authorization
@@ -408,7 +377,7 @@ class MyGUI:
         if not check_str_before_send(filename):
             print("Filename not allow : |")
             return
-        username = self.fetch_owner_entry.get()
+        username = self.fetch_username_entry.get()
         if not check_str_before_send(username):
             print("Username not allow : |")
             return
