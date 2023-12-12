@@ -41,7 +41,7 @@ def login(username, password):
 
 
 def register(username, password):
-    result = database.users.find_one({"username": username, "password": password})
+    result = database.users.find_one({"username": username})
     if not result:
         database.users.insert_one({"username": username, "password": password})
         return True
@@ -146,17 +146,30 @@ def handle_publish_request(conn):
         return
     # Check whether filename is duplicated.
     result = database.files.find_one(
-        {"filename": filename}
+        {"filename": filename, "user_id": user_id}
     )
     if result:
         send_msg(conn, "publish fail|msg: Your filename is duplicated with a file you upload before!")
         return
     # No duplicate, insert into `files` collection.
     database.files.insert_one({
-        "user_id": ObjectId(user_id),
+        "user_id": user_id,
         "filename": filename
     })
     send_msg(conn, "publish success")
+
+
+def handle_no_publish_request(conn):
+    # Send `no publish` back
+    send_msg("no publish")
+    # Authentication process
+    user_id = authenticate_peer(conn)
+    if not user_id:
+        return
+    # get filename
+    msg = recv_msg(conn)
+    filename = msg.split(":")[1]
+    database.files.delete_one({"user_id": user_id, "filename": filename})
 
 
 def handle_fetch_request(conn):
@@ -215,8 +228,14 @@ def handle_get_file_list(conn):
     []
     '''
     js_data = json.loads(str_data)
+
     for d in list(data):
-        js_data.append({"filename": d["filename"], "username": d["user"][0]["username"]})
+        if d["user"]:
+            js_data.append(
+                {"filename": d["filename"], "username": d["user"][0]["username"]}
+            )
+        else:
+            print(d["filename"])
 
     with open("./data/file-list.json", "w") as file:
         json.dump(js_data, file, indent=4)
@@ -239,15 +258,29 @@ def handle_request(conn, addr):
             handle_address_declaration(conn)
         elif command == "publish":
             handle_publish_request(conn)
+        elif command == "no publish":
+            handle_no_publish_request(conn)
         elif command == "fetch":
             handle_fetch_request(conn)
         elif command == "file list":
             handle_get_file_list(conn)
             pass
         elif command == "ping":
-            send_msg(conn, "pong")
+            send_msg(conn, "ping")
         elif command == "":
             break
+
+
+def cml_user_list():
+    result = database.users.find()
+    print("-------------- USER LIST -------------")
+    for user in result:
+        print(f"username={user['username']}")
+    print("-------------- END USER LIST -------------")
+
+
+def cml_discover():
+    pass
 
 
 def send_msg(conn, msg):
@@ -296,16 +329,22 @@ def listening():
     while True:
         conn, addr = tracker_socket.accept()
         thread = threading.Thread(target=handle_request, args=(conn, addr))
+        thread.daemon = True
         thread.start()
-
 
 
 def main():
     thread = threading.Thread(target=listening)
+    thread.daemon = True
     thread.start()
     while True:
-        pass
-
+        cmd = input()
+        if cmd == "user list":
+            cml_user_list()
+        elif cmd == "discover":
+            cml_discover()
+        elif cmd == "exit":
+            break
 
 
 if __name__ == "__main__":

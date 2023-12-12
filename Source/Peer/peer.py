@@ -37,7 +37,6 @@ class MyGUI:
         self.isListened = False
         self.token = ""
         self.workspace_path = os.getenv("WORKSPACE_PATH")
-        self.data_json_file = "data.json"
         self.file_list_json_file = "file-list.json"
 
         self.tracker_socket = None
@@ -102,12 +101,21 @@ class MyGUI:
         self.filename_label.grid(row=2, columnspan=3, padx=3, pady=3, sticky="W")
         self.filename_entry = ttk.Entry(master=self.publish_frame)
         self.filename_entry.grid(row=3, columnspan=3, padx=3, pady=5, sticky="WE")
-        # GUI: Publish frame -> Publish button
-        self.publish_button = ttk.Button(master=self.publish_frame,
+        # GUI: Publish frame -> Publish buttons
+        self.publish_buttons_frame = ttk.Frame(master=self.publish_frame)
+        self.publish_buttons_frame.grid(row=4, columnspan=3)
+
+        self.no_publish_button = ttk.Button(master=self.publish_buttons_frame,
+                                            style='Accent.TButton',
+                                            text="No Publish",
+                                            command=self.handle_no_publish)
+        self.no_publish_button.grid(row=0, column=0, padx=2, pady=5)
+
+        self.publish_button = ttk.Button(master=self.publish_buttons_frame,
                                          style='Accent.TButton',
                                          text="Publish",
                                          command=self.handle_publish)
-        self.publish_button.grid(row=4, columnspan=3, pady=5)
+        self.publish_button.grid(row=0, column=1, padx=2, pady=5)
 
         # GUI: Left frame -> Fetch frame
         self.fetch_frame = ttk.LabelFrame(master=self.left_frame, text="Fetch file")
@@ -191,7 +199,8 @@ class MyGUI:
         self.main_frame.pack_forget()
         self.username_entry.delete(0, tk.END)
         self.password_entry.delete(0, tk.END)
-        self.login_frame.pack()
+        self.root.title(f"P2P File Sharing")
+        self.login_frame.pack(padx=50, pady=50)
 
     def refresh_tree_view_data(self):
         # Clear all old data.
@@ -222,6 +231,12 @@ class MyGUI:
         self.create_folder_if_not_exists()
         if os.path.exists(self.workspace_path + "/" + self.file_list_json_file):
             os.remove(self.workspace_path + "/" + self.file_list_json_file)
+
+        # Check connection, if not connect
+        if not self.connect_to_tracker():
+            self.print_log("[ERROR] Get file list: Cannot connect to tracker!")
+            return
+
         # Send `file list` request to tracker
         send_msg(self.tracker_socket, "file list")
         # Receive ACK of request
@@ -247,19 +262,21 @@ class MyGUI:
 
     def create_json_file_if_not_exists(self, filename):
         uri = self.workspace_path + "/" + filename
-        file = open(uri, "r")
-        js_data = file.read(512)
-        if js_data:
-            return
-        file.close()
+        # Create new file
+        with open(uri, "a") as new_file:
+            pass
+        with open(uri, "r") as file:
+            js_data = file.read(512)
+            if js_data:
+                return
         # Create a new form for json
-        file = open(uri, "w")
-        str_data = '''
-        []
-        '''
-        js_data = json.loads(str_data)
-        json.dump(js_data, file)
-        file.close()
+        with open(uri, "w") as file:
+            file = open(uri, "w")
+            str_data = '''
+            []
+            '''
+            js_data = json.loads(str_data)
+            json.dump(js_data, file)
 
     def check_connection(self):
         if not self.tracker_socket:
@@ -267,7 +284,7 @@ class MyGUI:
         # Send ping to check whether this connection is alive.
         try:
             send_msg(self.tracker_socket, "ping")
-            if recv_msg(self.tracker_socket) == "pong":
+            if recv_msg(self.tracker_socket) == "ping":
                 return True
         except Exception as e:
             print(e)
@@ -305,14 +322,18 @@ class MyGUI:
         if not check_str_before_send(password):
             self.print_login_error("Don't use [ : | ] for password")
             return
-        if len(username) > 100 and len(password) > 100:
+        if len(username) > 100 or len(password) > 100:
             self.print_login_error("Your username or password is too long")
+            return
+        if len(username) < 6 or len(password) < 6:
+            self.print_login_error("Your username or password is too short")
             return
 
         # Check connection, if not connect
         if not self.connect_to_tracker():
             self.print_login_error("Cannot connect to tracker!")
             return
+
         # Send `register` type request
         send_msg(self.tracker_socket, "register")
         res = recv_msg(self.tracker_socket)
@@ -328,7 +349,7 @@ class MyGUI:
         # Receive register response
         res = recv_msg(self.tracker_socket)
         if res == "register fail":
-            self.print_login_error("Register fail!")
+            self.print_login_error("Register fail! Username already exists")
         elif res == "register success":
             self.print_login_error("Register success!")
         else:
@@ -409,7 +430,7 @@ class MyGUI:
 
     def declare_address(self):
         if not self.connect_to_tracker():
-            self.print_log("[ERROR] Failed to connect to tracker!")
+            self.print_log("[ERROR] Address: Failed to connect to tracker!")
             return
 
         # Send `address` to come into handle_address_declaration process.
@@ -420,7 +441,7 @@ class MyGUI:
             return
         # Authenticate with tracker by using jwt
         if not self.authentication_process():
-            self.print_log("[ERROR] Authenticate fail!")
+            self.print_log("[ERROR] Declare: Authenticate fail!")
             return
 
         # Send `ip`, `port` to tracker
@@ -436,13 +457,15 @@ class MyGUI:
 
     def save_publish_file_at_local_storage(self, filepath, filename):
         # Saving into file
+        uri = self.workspace_path + "/" + self.token + ".json"
         self.create_folder_if_not_exists()
-        self.create_json_file_if_not_exists(self.data_json_file)
-        file = open(self.workspace_path + "/data.json", "r")
+        self.create_json_file_if_not_exists(self.token + ".json")
+
+        file = open(uri, "r")
         js_data = json.load(file)
         file.close()
 
-        file = open(self.workspace_path + "/data.json", "w")
+        file = open(uri, "w")
         js_data.append({"filepath": filepath, "filename": filename})
         json.dump(js_data, file, indent=4)
         file.close()
@@ -461,10 +484,14 @@ class MyGUI:
             self.print_log("[ERROR] Publish: Your filename must not contain [:, |]")
             return
 
+        if not self.connect_to_tracker():
+            self.print_log("[ERROR] Publish: Cannot connect to tracker!")
+            return
+
         # Request `publish` service from tracker
         send_msg(self.tracker_socket, "publish")
         if not recv_msg(self.tracker_socket) == "publish":
-            self.print_log("[ERROR] Publish: WRONG PROCESS!")
+            self.print_log("[ERROR] Publish: Wrong process! Tracker didn't send back type of request!")
             return
         # Authentication process
         if not self.authentication_process():
@@ -477,39 +504,43 @@ class MyGUI:
         if res == "publish success":
             self.save_publish_file_at_local_storage(filepath, filename)
             self.print_log("[SUCCESS] Publish file!")
-        elif res == "publish fail":
+        else:
             stt, msg = res.split('|')
             msg = msg.split(':')[1]
-            self.print_log("[FAIL] Publish file!")
-        else:
-            self.print_log("[ERROR] Publish: Wrong process!")
+            self.print_log(f"[FAIL] Publish file! {msg}")
 
     def fetch_file_from_peer(self, addr, download_directory, filename):
         addr, ip, port = addr.split(":")
         port = int(port)
-        peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        peer_socket.connect((ip, port))
+        try:
+            peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            peer_socket.connect((ip, port))
+        except:
+            self.print_log(f"[ERROR] Fetch: Cannot connect to peer {addr}")
+            return
+
         # Send `fetch` request
         send_msg(peer_socket, "fetch")
         # Receive confirm request
         if not recv_msg(peer_socket) == "fetch":
             self.print_log("[ERROR] Fetch: Wrong process!")
-            return
+            return False
         # Send filename
         send_msg(peer_socket, f"filename:{filename}")
         # Receive file status
         msg = recv_msg(peer_socket)
         if msg == "file not found":
             self.print_log("[FAIL] Fetch (PEER): Peer cannot found the file!")
-            return
+            return False
         if not msg == "file found":
             self.print_log("[ERROR] Fetch (PEER): Wrong process!")
-            return
+            return False
         # File is found, prepare to get file
         recv_file(peer_socket, download_directory + '/' + filename)
         # Send success
         send_msg(peer_socket, "fetch success")
         self.print_log("[SUCCESS] Fetch (PEER): Get file!")
+        return True
 
     def handle_fetch(self):
         filename = self.fetch_filename_entry.get()
@@ -531,6 +562,10 @@ class MyGUI:
             self.print_log("[NOTIFY] Fetch: Please, choose your filepath to fetch!")
             return
 
+        if not self.connect_to_tracker():
+            self.print_log("[ERROR] Fetch: Cannot connect to tracker!")
+            return
+
         send_msg(self.tracker_socket, "fetch")
         if not recv_msg(self.tracker_socket) == "fetch":
             self.print_log("[ERROR] Fetch: Not received confirmation message")
@@ -539,7 +574,7 @@ class MyGUI:
         send_msg(self.tracker_socket, f"filename:{filename}|username:{username}")
         # Last ACK from trackers
         res = recv_msg(self.tracker_socket)
-        # ######### Splot
+        # ######### Split
         stt, msg = res.split("|")
         if stt == "fetch fail":
             self.print_log(f"[FAIL] Fetch (tracker): {msg}")
@@ -556,7 +591,7 @@ class MyGUI:
         # Make sure the uri is an existed json file
         self.create_folder_if_not_exists()
         # self.create_json_file_if_not_exists()
-        uri = self.workspace_path + '/data.json'
+        uri = self.workspace_path + "/" + self.token + ".json"
         # Send back to confirm `discover` request
         send_msg(conn, "discover")
         send_file(conn, uri)
@@ -568,6 +603,23 @@ class MyGUI:
         else:
             self.print_log("[ERROR]: Wrong process!")
 
+    def handle_no_publish(self, filename):
+        if not self.connect_to_tracker():
+            self.print_log("[ERROR] No publish: Cannot connect to tracker!")
+            return
+
+        send_msg(self.tracker_socket, "no publish")
+        if not recv_msg(self.tracker_socket) == "no publish":
+            self.print_log("[ERROR] No publish: Not received confirmation message")
+            return
+
+        # Authenticate with tracker by using jwt
+        if not self.authentication_process():
+            self.print_log("[ERROR] No publish: Authenticate fail!")
+            return
+        # Send filename
+        send_msg(f"filename:{filename}")
+
     def handle_fetch_request_from_another(self, conn):
         # Send back `fetch` to confirm.
         send_msg(conn, "fetch")
@@ -576,7 +628,8 @@ class MyGUI:
         filepath = ""
 
         # Look up filename
-        file = open(self.workspace_path + "/data.json", "r")
+        uri = self.workspace_path + "/" + self.token + ".json"
+        file = open(uri, "r")
         data_js = json.load(file)
         for f in data_js:
             if f['filename'] == filename:
