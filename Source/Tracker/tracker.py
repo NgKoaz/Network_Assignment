@@ -40,6 +40,15 @@ def login(username, password):
     return ""
 
 
+def register(username, password):
+    result = database.users.find_one({"username": username, "password": password})
+    if not result:
+        database.users.insert_one({"username": username, "password": password})
+        return True
+    # register fail
+    return False
+
+
 def handle_login_request(conn):
     # Send back to confirm request for peer
     send_msg(conn, "login")
@@ -60,6 +69,21 @@ def handle_login_request(conn):
             key=KEY
         )
         msg = f"login success|token:{token}"
+    send_msg(conn, msg)
+
+
+def handle_register_request(conn):
+    # Send back to confirm request for peer
+    send_msg(conn, "register")
+    # Receive username and password from peer
+    msg = recv_msg(conn)
+    username, password = handle_login_info(msg)
+    # Check username, password
+    if register(username, password):
+        # Send empty token
+        msg = f"register success"
+    else:
+        msg = f"register fail"
     send_msg(conn, msg)
 
 
@@ -209,6 +233,8 @@ def handle_request(conn, addr):
         command = recv_msg(conn)
         if command == "login":
             handle_login_request(conn)
+        elif command == "register":
+            handle_register_request(conn)
         elif command == "address":
             handle_address_declaration(conn)
         elif command == "publish":
@@ -273,9 +299,13 @@ def listening():
         thread.start()
 
 
+
 def main():
     thread = threading.Thread(target=listening)
     thread.start()
+    while True:
+        pass
+
 
 
 if __name__ == "__main__":

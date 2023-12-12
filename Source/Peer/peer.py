@@ -49,20 +49,26 @@ class MyGUI:
         self.login_field.pack(pady=(0, 5))
         # GUI: Login frame -> Username field
         self.username_label = ttk.Label(master=self.login_field, text="Username", width=25)
-        self.username_label.grid(row=0, column=0, padx=5, pady=3, sticky="W")
+        self.username_label.grid(row=0, columnspan=2, padx=5, pady=3, sticky="W")
         self.username_entry = ttk.Entry(master=self.login_field)
-        self.username_entry.grid(row=1, column=0, padx=5, pady=3, sticky="WE")
+        self.username_entry.grid(row=1, columnspan=2, padx=5, pady=3, sticky="WE")
         # GUI: Login frame -> Password field
         self.password_label = ttk.Label(master=self.login_field, text="Password", width=25)
-        self.password_label.grid(row=2, column=0, padx=5, pady=5, sticky="W")
+        self.password_label.grid(row=2, columnspan=2, padx=5, pady=5, sticky="W")
         self.password_entry = ttk.Entry(master=self.login_field)
-        self.password_entry.grid(row=3, column=0, padx=5, pady=5, sticky="WE")
-        # GUI: Login frame -> Login butotn
+        self.password_entry.grid(row=3, columnspan=2, padx=5, pady=5, sticky="WE")
+        # GUI: Login frame -> Login button
+        self.register_button = ttk.Button(master=self.login_field,
+                                          style='Accent.TButton',
+                                          text="Register",
+                                          command=self.handle_register)
+        self.register_button.grid(row=4, column=0, padx=5, pady=8)
         self.login_button = ttk.Button(master=self.login_field,
                                        style='Accent.TButton',
                                        text="Login",
                                        command=self.handle_login)
-        self.login_button.grid(row=4, column=0, padx=5, pady=8)
+        self.login_button.grid(row=4, column=1, padx=5, pady=8)
+
         # GUI: Login frame -> Status label
         self.login_status_field = ttk.Frame(master=self.login_frame)
         self.login_status_field.pack(pady=(5, 0))
@@ -288,6 +294,46 @@ class MyGUI:
     def clear_log(self):
         self.log_textbox.delete(1.0, tk.END)
 
+    def handle_register(self):
+        username = self.username_entry.get()
+        password = self.password_entry.get()
+
+        # Check string before send. [:,|,',"] is not allow
+        if not check_str_before_send(username):
+            self.print_login_error("Do not use [ : | ] for username!")
+            return
+        if not check_str_before_send(password):
+            self.print_login_error("Don't use [ : | ] for password")
+            return
+        if len(username) > 100 and len(password) > 100:
+            self.print_login_error("Your username or password is too long")
+            return
+
+        # Check connection, if not connect
+        if not self.connect_to_tracker():
+            self.print_login_error("Cannot connect to tracker!")
+            return
+        # Send `register` type request
+        send_msg(self.tracker_socket, "register")
+        res = recv_msg(self.tracker_socket)
+        if not res == "register":
+            # Wrong process, we have to reconnect later
+            self.tracker_socket.close()
+            return
+        # Send `username`, `password` to register
+        msg = f"username:{username}|password:{password}"
+        send_msg(self.tracker_socket, msg)
+        time.sleep(0.05)
+
+        # Receive register response
+        res = recv_msg(self.tracker_socket)
+        if res == "register fail":
+            self.print_login_error("Register fail!")
+        elif res == "register success":
+            self.print_login_error("Register success!")
+        else:
+            self.print_login_error("[ERROR] Wrong process!")
+
     def handle_login_response(self, res):
         # Pattern of response is "msg|token:<value>"
         msg, token = res.split("|")
@@ -327,6 +373,7 @@ class MyGUI:
         if not res == "login":
             # Wrong process, we have to reconnect later
             self.tracker_socket.close()
+            return
 
         # Send `username`, `password` to login
         msg = f"username:{username}|password:{password}"
@@ -420,7 +467,9 @@ class MyGUI:
             self.print_log("[ERROR] Publish: WRONG PROCESS!")
             return
         # Authentication process
-        self.authentication_process()
+        if not self.authentication_process():
+            self.print_log("[ERROR] Authenticate fail!")
+            return
         # Send filename to tracker
         send_msg(self.tracker_socket, filename)
         # Receive last ACK
@@ -444,7 +493,7 @@ class MyGUI:
         send_msg(peer_socket, "fetch")
         # Receive confirm request
         if not recv_msg(peer_socket) == "fetch":
-            self.print_log("[ERROR] Fetch: Cann")
+            self.print_log("[ERROR] Fetch: Wrong process!")
             return
         # Send filename
         send_msg(peer_socket, f"filename:{filename}")
@@ -556,6 +605,8 @@ class MyGUI:
                 self.file_discover(conn)
             elif command == "fetch":
                 self.handle_fetch_request_from_another(conn)
+            elif command == "ping":
+                pass
             elif command == "":
                 break
 
